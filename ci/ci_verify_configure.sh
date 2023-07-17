@@ -15,8 +15,9 @@ source "$(dirname "$0")/lib/ci.lib.sh"
 cd "$CI_TOPLEVEL_DIR"
 
 CI_SRC_DIR="$CI_TOPLEVEL_DIR"
-CI_BUILD_DIR="$CI_TOPLEVEL_DIR/out/ci_verify_configure.build"
-CI_INSTALL_DIR="$CI_TOPLEVEL_DIR/out/ci_verify_configure.install"
+CI_OUT_DIR="$CI_TOPLEVEL_DIR/out"
+CI_BUILD_DIR="$CI_OUT_DIR/ci_verify_configure.$CI_TARGET_SYSTEM.$CI_TARGET_MACHINE.build"
+CI_INSTALL_DIR="$CI_OUT_DIR/ci_verify_configure.$CI_TARGET_SYSTEM.$CI_TARGET_MACHINE.install"
 
 function ci_init_build {
     CI_MAKE="${CI_MAKE:-make}"
@@ -30,8 +31,12 @@ function ci_init_build {
 
 function ci_trace_build {
     ci_info "## START OF CONFIGURATION ##"
-    ci_info "system name: $CI_SYSTEM_NAME"
-    ci_info "machine hardware name: $CI_MACHINE_NAME"
+    ci_info "host system: $CI_HOST_SYSTEM"
+    ci_info "host machine hardware: $CI_HOST_MACHINE"
+    [[ "$CI_TARGET_SYSTEM" != "$CI_HOST_SYSTEM" ]] &&
+        ci_info "target system: $CI_TARGET_SYSTEM"
+    [[ "$CI_TARGET_MACHINE" != "$CI_HOST_MACHINE" ]] &&
+        ci_info "target machine hardware: $CI_TARGET_MACHINE"
     ci_info "source directory: $CI_SRC_DIR"
     ci_info "build directory: $CI_BUILD_DIR"
     ci_info "install directory: $CI_INSTALL_DIR"
@@ -83,7 +88,7 @@ function ci_build {
     [[ $CI_CPP_FLAGS ]] && ci_spawn export CPPFLAGS="$CI_CPP_FLAGS"
     [[ $CI_AR ]] && ci_spawn export AR="$CI_AR"
     [[ $CI_RANLIB ]] && ci_spawn export RANLIB="$CI_RANLIB"
-    [[ $CI_LD ]] && ci_spawn export CPP="$CI_LD"
+    [[ $CI_LD ]] && ci_spawn export LD="$CI_LD"
     [[ $CI_LD_FLAGS ]] && ci_spawn export LDFLAGS="$CI_LD_FLAGS"
     [[ $CI_SANITIZERS ]] && {
         ci_spawn export CFLAGS="-fsanitize=$CI_SANITIZERS ${CFLAGS:-"-O2"}"
