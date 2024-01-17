@@ -29,9 +29,9 @@ int main (int argc, char *argv[]);
 void usage ();
 BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
               BOOL interlace, BOOL alpha);
-BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
-                       FILE *pnm_file, FILE *alpha_file,
-                       BOOL interlace, BOOL alpha);
+BOOL do_pnm2png (png_struct *png_ptr, png_info *info_ptr,
+                 FILE *pnm_file, FILE *alpha_file,
+                 BOOL interlace, BOOL alpha);
 int fscan_pnm_magic (FILE *pnm_file, char *magic_buf, size_t magic_buf_size);
 int fscan_pnm_token (FILE *pnm_file, char *token_buf, size_t token_buf_size);
 int fscan_pnm_uint_32 (FILE *pnm_file, png_uint_32 *num_ptr);
@@ -47,9 +47,11 @@ int main (int argc, char *argv[])
   FILE *fp_rd = stdin;
   FILE *fp_al = NULL;
   FILE *fp_wr = stdout;
+  const char *fname_wr = NULL;
   BOOL interlace = FALSE;
   BOOL alpha = FALSE;
   int argi;
+  int ret;
 
   for (argi = 1; argi < argc; argi++)
   {
@@ -95,6 +97,7 @@ int main (int argc, char *argv[])
     }
     else if (fp_wr == stdout)
     {
+      fname_wr = argv[argi];
       if ((fp_wr = fopen (argv[argi], "wb")) == NULL)
       {
         fprintf (stderr, "PNM2PNG\n");
@@ -122,12 +125,7 @@ int main (int argc, char *argv[])
 #endif
 
   /* call the conversion program itself */
-  if (pnm2png (fp_rd, fp_wr, fp_al, interlace, alpha) == FALSE)
-  {
-    fprintf (stderr, "PNM2PNG\n");
-    fprintf (stderr, "Error:  unsuccessful converting to PNG-image\n");
-    exit (1);
-  }
+  ret = pnm2png (fp_rd, fp_wr, fp_al, interlace, alpha);
 
   /* close input file */
   fclose (fp_rd);
@@ -136,6 +134,15 @@ int main (int argc, char *argv[])
   /* close alpha file */
   if (alpha)
     fclose (fp_al);
+
+  if (!ret)
+  {
+    fprintf (stderr, "PNM2PNG\n");
+    fprintf (stderr, "Error:  unsuccessful converting to PNG-image\n");
+    if (fname_wr)
+      remove (fname_wr); /* no broken output file shall remain behind */
+    exit (1);
+  }
 
   return 0;
 }
@@ -168,7 +175,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
   png_info      *info_ptr;
   BOOL          ret;
 
-  /* initialize the libpng structures for writing to png_file */
+  /* initialize the libpng context for writing to png_file */
 
   png_ptr = png_create_write_struct (png_get_libpng_ver(NULL),
                                      NULL, NULL, NULL);
@@ -191,8 +198,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
   png_init_io (png_ptr, png_file);
 
   /* do the actual conversion */
-  ret = pnm2png_internal (png_ptr, info_ptr,
-                          pnm_file, alpha_file, interlace, alpha);
+  ret = do_pnm2png (png_ptr, info_ptr, pnm_file, alpha_file, interlace, alpha);
 
   /* clean up the libpng structures and their internally-managed data */
   png_destroy_write_struct (&png_ptr, &info_ptr);
@@ -201,12 +207,12 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
 }
 
 /*
- *  pnm2png_internal
+ *  do_pnm2png - does the conversion in a fully-initialized libpng context
  */
 
-BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
-                       FILE *pnm_file, FILE *alpha_file,
-                       BOOL interlace, BOOL alpha)
+BOOL do_pnm2png (png_struct *png_ptr, png_info *info_ptr,
+                 FILE *pnm_file, FILE *alpha_file,
+                 BOOL interlace, BOOL alpha)
 {
   png_byte      **row_pointers;
   png_byte      *pix_ptr;
@@ -222,9 +228,7 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
   png_uint_32   alpha_width = 0, alpha_height = 0;
   int           alpha_depth = 0, alpha_present = 0;
   BOOL          alpha_raw = FALSE;
-#if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
   BOOL          packed_bitmap = FALSE;
-#endif
 
   /* read header of PNM file */
 
@@ -247,16 +251,10 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
 
   if ((magic_token[1] == '1') || (magic_token[1] == '4'))
   {
-#if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
     raw = (magic_token[1] == '4');
     bit_depth = 1;
     color_type = PNG_COLOR_TYPE_GRAY;
     packed_bitmap = TRUE;
-#else
-    fprintf (stderr, "PNM2PNG built without PNG_WRITE_INVERT_SUPPORTED and\n");
-    fprintf (stderr, "PNG_WRITE_PACK_SUPPORTED can't read PBM (P1,P4) files\n");
-    return FALSE;
-#endif
   }
   else if ((magic_token[1] == '2') || (magic_token[1] == '5'))
   {
@@ -356,14 +354,12 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
 
   alpha_present = (channels - 1) % 2;
 
-#if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
   if (packed_bitmap)
   {
     /* row data is as many bytes as can fit width x channels x bit_depth */
     row_bytes = (width * channels * bit_depth + 7) / 8;
   }
   else
-#endif
   {
     /* row_bytes is the width x number of channels x (bit-depth / 8) */
     row_bytes = width * channels * ((bit_depth <= 8) ? 1 : 2);
@@ -396,7 +392,6 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
   for (row = 0; row < height; row++)
   {
     pix_ptr = row_pointers[row];
-#if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
     if (packed_bitmap)
     {
       for (i = 0; i < row_bytes; i++)
@@ -406,7 +401,6 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
       }
     }
     else
-#endif
     {
       for (col = 0; col < width; col++)
       {
@@ -466,13 +460,11 @@ BOOL pnm2png_internal (png_struct *png_ptr, png_info *info_ptr,
                 (!interlace) ? PNG_INTERLACE_NONE : PNG_INTERLACE_ADAM7,
                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
-#if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
   if (packed_bitmap == TRUE)
   {
     png_set_packing (png_ptr);
     png_set_invert_mono (png_ptr);
   }
-#endif
 
   /* write the file header information */
   png_write_info (png_ptr, info_ptr);
