@@ -908,15 +908,15 @@ PNG_EXPORT(2, void, png_set_sig_bytes, (png_structrp png_ptr, int num_bytes));
 /* Check sig[start] through sig[start + num_to_check - 1] to see if it's a
  * PNG file.  Returns zero if the supplied bytes match the 8-byte PNG
  * signature, and non-zero otherwise.  Having num_to_check == 0 or
- * start > 7 will always fail (ie return non-zero).
+ * start > 7 will always fail (i.e. return non-zero).
  */
 PNG_EXPORT(3, int, png_sig_cmp, (png_const_bytep sig, size_t start,
     size_t num_to_check));
 
 /* Simple signature checking function.  This is the same as calling
- * png_check_sig(sig, n) := !png_sig_cmp(sig, 0, n).
+ * png_check_sig(sig, n) := (png_sig_cmp(sig, 0, n) != 0).
  */
-#define png_check_sig(sig, n) !png_sig_cmp((sig), 0, (n))
+#define png_check_sig(sig, n) (png_sig_cmp((sig), 0, (n)) != 0)
 
 /* Allocate and initialize png_ptr struct for reading, and any other memory. */
 PNG_EXPORTA(4, png_structp, png_create_read_struct,
@@ -3204,11 +3204,18 @@ PNG_EXPORT(245, int, png_image_write_to_memory, (png_imagep image, void *memory,
 #ifdef PNG_MIPS_MSA_API_SUPPORTED
 #  define PNG_MIPS_MSA   6 /* HARDWARE: MIPS Msa SIMD instructions supported */
 #endif
-#define PNG_IGNORE_ADLER32 8
-#ifdef PNG_POWERPC_VSX_API_SUPPORTED
-#  define PNG_POWERPC_VSX   10 /* HARDWARE: PowerPC VSX SIMD instructions supported */
+#ifdef PNG_DISABLE_ADLER32_CHECK_SUPPORTED
+#  define PNG_IGNORE_ADLER32 8 /* SOFTWARE: disable Adler32 check on IDAT */
 #endif
-#define PNG_OPTION_NEXT  12 /* Next option - numbers must be even */
+#ifdef PNG_POWERPC_VSX_API_SUPPORTED
+#  define PNG_POWERPC_VSX   10 /* HARDWARE: PowerPC VSX SIMD instructions
+                                * supported */
+#endif
+#ifdef PNG_MIPS_MMI_API_SUPPORTED
+#  define PNG_MIPS_MMI   12 /* HARDWARE: MIPS MMI SIMD instructions supported */
+#endif
+
+#define PNG_OPTION_NEXT  14 /* Next option - numbers must be even */
 
 /* Return values: NOTE: there are four values and 'off' is *not* zero */
 #define PNG_OPTION_UNSET   0 /* Unset - defaults to off */
