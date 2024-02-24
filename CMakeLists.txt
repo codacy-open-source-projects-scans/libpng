@@ -20,8 +20,8 @@ cmake_minimum_required(VERSION 3.6)
 set(PNGLIB_MAJOR 1)
 set(PNGLIB_MINOR 6)
 set(PNGLIB_REVISION 43)
-#set(PNGLIB_SUBREVISION 0)
-set(PNGLIB_SUBREVISION "git")
+set(PNGLIB_SUBREVISION 0)
+#set(PNGLIB_SUBREVISION "git")
 set(PNGLIB_VERSION ${PNGLIB_MAJOR}.${PNGLIB_MINOR}.${PNGLIB_REVISION})
 set(PNGLIB_ABI_VERSION ${PNGLIB_MAJOR}${PNGLIB_MINOR})
 set(PNGLIB_SHARED_VERSION ${PNGLIB_ABI_VERSION}.${PNGLIB_REVISION}.${PNGLIB_SUBREVISION})
@@ -62,9 +62,18 @@ if(APPLE)
 endif()
 
 # Allow the users to switch on/off the auxiliary build and test artifacts.
-# NOTE: These artifacts are NOT part of libpng proper, and are subject to change at any time.
+# These artifacts are NOT part of libpng proper, and are subject to change
+# at any time.
 option(PNG_TESTS "Build the libpng tests" ON)
-option(PNG_TOOLS "Build the libpng tools" ON)
+
+# Same as above, but for the third-party tools.
+# Although these tools are targetted at development environments only,
+# the users are allowed to override the option to build by default.
+if (ANDROID OR IOS)
+  option(PNG_TOOLS "Build the libpng tools" OFF)
+else()
+  option(PNG_TOOLS "Build the libpng tools" ON)
+endif()
 
 # Maintain backwards compatibility with the deprecated option PNG_EXECUTABLES.
 option(PNG_EXECUTABLES "[Deprecated; please use PNG_TOOLS]" ON)
@@ -89,7 +98,6 @@ option(PNG_BUILD_ZLIB "Custom zlib location, else find_package is used" OFF)
 if(NOT PNG_BUILD_ZLIB)
   find_package(ZLIB REQUIRED)
 elseif(POLICY CMP0074)
-  # TODO: Remove the policy check if CMake version 3.12 or greater becomes the minimum required.
   if("x${ZLIB_ROOT}" STREQUAL "x")
     message(DEPRECATION
             "The option PNG_BUILD_ZLIB has been deprecated; please use ZLIB_ROOT instead")
@@ -344,7 +352,15 @@ int main(void) { return 0; }
   file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/conftest.map")
 endif()
 
-find_program(AWK NAMES gawk awk)
+# Find an AWK language processor.
+# Start with specific AWK implementations like gawk and nawk, which are
+# known to work with our scripts, then fall back to the system awk.
+find_program(AWK NAMES gawk nawk awk)
+if(AWK)
+  message(STATUS "Found AWK program: ${AWK}")
+else()
+  message(STATUS "Could not find an AWK-compatible program")
+endif()
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
@@ -386,7 +402,7 @@ else()
                        COMMAND "${CMAKE_COMMAND}"
                                "-DINPUT=${_GC_INPUT}"
                                "-DOUTPUT=${_GC_OUTPUT}"
-                               -P "${CMAKE_CURRENT_BINARY_DIR}/genchk.cmake"
+                               -P "${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/genchk.cmake"
                        DEPENDS "${_GC_INPUT}" ${_GC_DEPENDS}
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endfunction()
@@ -409,7 +425,7 @@ else()
                        COMMAND "${CMAKE_COMMAND}"
                                "-DINPUT=${_GO_INPUT}"
                                "-DOUTPUT=${_GO_OUTPUT}"
-                               -P "${CMAKE_CURRENT_BINARY_DIR}/genout.cmake"
+                               -P "${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/genout.cmake"
                        DEPENDS "${_GO_INPUT}" ${_GO_DEPENDS}
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endfunction()
@@ -428,7 +444,7 @@ else()
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${_GSO_OUTPUT}"
                        COMMAND "${CMAKE_COMMAND}"
                                "-DOUTPUT=${_GSO_OUTPUT}"
-                               -P "${CMAKE_CURRENT_BINARY_DIR}/gensrc.cmake"
+                               -P "${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/gensrc.cmake"
                        DEPENDS ${_GSO_DEPENDS}
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endfunction()
@@ -558,7 +574,7 @@ else()
   add_custom_target(png_genprebuilt
                     COMMAND "${CMAKE_COMMAND}"
                             "-DOUTPUT=scripts/pnglibconf.h.prebuilt"
-                            -P "${CMAKE_CURRENT_BINARY_DIR}/gensrc.cmake"
+                            -P "${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/gensrc.cmake"
                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
   # A single target handles generation of all generated files.
@@ -697,10 +713,9 @@ if(PNG_SHARED)
     set_target_properties(png_shared PROPERTIES DEFINE_SYMBOL PNG_BUILD_DLL)
   endif()
   target_include_directories(png_shared
-                             PUBLIC
-                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_shared SYSTEM
+                             INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_shared PUBLIC ZLIB::ZLIB ${M_LIBRARY})
 endif()
 
@@ -712,14 +727,19 @@ if(PNG_STATIC)
                         OUTPUT_NAME "${PNG_STATIC_OUTPUT_NAME}"
                         DEBUG_POSTFIX "${PNG_DEBUG_POSTFIX}")
   target_include_directories(png_static
-                             PUBLIC
-                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_static SYSTEM
+                             INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_static PUBLIC ZLIB::ZLIB ${M_LIBRARY})
 endif()
 
-if(PNG_FRAMEWORK AND APPLE)
+if(PNG_FRAMEWORK AND NOT APPLE)
+  message(AUTHOR_WARNING
+          "Setting PNG_FRAMEWORK to OFF, as it only applies to Apple systems")
+  set(PNG_FRAMEWORK OFF)
+endif()
+
+if(PNG_FRAMEWORK)
   add_library(png_framework SHARED ${libpng_sources})
   add_dependencies(png_framework png_genfiles)
   list(APPEND PNG_LIBRARY_TARGETS png_framework)
@@ -736,10 +756,9 @@ if(PNG_FRAMEWORK AND APPLE)
   # Avoid CMake's implicit compile definition "-Dpng_framework_EXPORTS".
   set_target_properties(png_framework PROPERTIES DEFINE_SYMBOL "")
   target_include_directories(png_framework
-                             PUBLIC
-                               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_framework SYSTEM
+                             INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_framework PUBLIC ZLIB::ZLIB ${M_LIBRARY})
 endif()
 
@@ -1002,13 +1021,13 @@ endfunction()
 
 # Create source generation scripts.
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake/genchk.cmake.in
-               ${CMAKE_CURRENT_BINARY_DIR}/genchk.cmake
+               ${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/genchk.cmake
                @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake/genout.cmake.in
-               ${CMAKE_CURRENT_BINARY_DIR}/genout.cmake
+               ${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/genout.cmake
                @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake/gensrc.cmake.in
-               ${CMAKE_CURRENT_BINARY_DIR}/gensrc.cmake
+               ${CMAKE_CURRENT_BINARY_DIR}/scripts/cmake/gensrc.cmake
                @ONLY)
 
 # libpng is a library so default to 'lib'
