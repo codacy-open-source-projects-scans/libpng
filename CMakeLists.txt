@@ -20,8 +20,8 @@ cmake_minimum_required(VERSION 3.6)
 set(PNGLIB_MAJOR 1)
 set(PNGLIB_MINOR 6)
 set(PNGLIB_REVISION 44)
-#set(PNGLIB_SUBREVISION 0)
-set(PNGLIB_SUBREVISION "git")
+set(PNGLIB_SUBREVISION 0)
+#set(PNGLIB_SUBREVISION "git")
 set(PNGLIB_VERSION ${PNGLIB_MAJOR}.${PNGLIB_MINOR}.${PNGLIB_REVISION})
 set(PNGLIB_ABI_VERSION ${PNGLIB_MAJOR}${PNGLIB_MINOR})
 set(PNGLIB_SHARED_VERSION ${PNGLIB_ABI_VERSION}.${PNGLIB_REVISION}.${PNGLIB_SUBREVISION})
@@ -362,8 +362,6 @@ if(AWK)
 else()
   message(STATUS "Could not find an AWK-compatible program")
 endif()
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 if(NOT AWK OR ANDROID OR IOS)
   # No awk available to generate sources; use pre-built pnglibconf.h
@@ -715,6 +713,8 @@ if(PNG_SHARED)
   endif()
   target_include_directories(png_shared
                              PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_shared
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
   target_include_directories(png_shared SYSTEM
                              INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_shared PUBLIC ZLIB::ZLIB ${M_LIBRARY})
@@ -729,6 +729,8 @@ if(PNG_STATIC)
                         DEBUG_POSTFIX "${PNG_DEBUG_POSTFIX}")
   target_include_directories(png_static
                              PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_static
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
   target_include_directories(png_static SYSTEM
                              INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_static PUBLIC ZLIB::ZLIB ${M_LIBRARY})
@@ -758,6 +760,8 @@ if(PNG_FRAMEWORK)
   set_target_properties(png_framework PROPERTIES DEFINE_SYMBOL "")
   target_include_directories(png_framework
                              PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(png_framework
+                             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
   target_include_directories(png_framework SYSTEM
                              INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libpng${PNGLIB_ABI_VERSION}>)
   target_link_libraries(png_framework PUBLIC ZLIB::ZLIB ${M_LIBRARY})
@@ -1127,6 +1131,30 @@ if(NOT SKIP_INSTALL_EXPORT AND NOT SKIP_INSTALL_ALL)
   install(EXPORT libpng
           DESTINATION ${CMAKE_INSTALL_LIBDIR}/libpng
           FILE libpng${PNGLIB_ABI_VERSION}.cmake)
+endif()
+
+# Create a CMake Config File that can be used via find_package(PNG CONFIG)
+if(NOT SKIP_INSTALL_CONFIG_FILE AND NOT SKIP_INSTALL_ALL)
+  install(TARGETS ${PNG_LIBRARY_TARGETS}
+          EXPORT PNGTargets
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          FRAMEWORK DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+  include(CMakePackageConfigHelpers)
+  write_basic_package_version_file(PNGConfigVersion.cmake
+                                   VERSION ${PNGLIB_VERSION}
+                                   COMPATIBILITY SameMinorVersion)
+
+  install(EXPORT PNGTargets
+          FILE PNGTargets.cmake
+          NAMESPACE PNG::
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PNG)
+
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake/PNGConfig.cmake
+                ${CMAKE_CURRENT_BINARY_DIR}/PNGConfigVersion.cmake
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PNG)
 endif()
 
 # TODO: Create MSVC import lib for MinGW-compiled shared lib.
