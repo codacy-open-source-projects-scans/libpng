@@ -23,7 +23,8 @@
 /* Create a PNG structure for reading, and allocate any memory needed. */
 PNG_FUNCTION(png_structp,PNGAPI
 png_create_read_struct,(png_const_charp user_png_ver, png_voidp error_ptr,
-    png_error_ptr error_fn, png_error_ptr warn_fn),PNG_ALLOCATED)
+    png_error_ptr error_fn, png_error_ptr warn_fn),
+    PNG_ALLOCATED)
 {
 #ifndef PNG_USER_MEM_SUPPORTED
    png_structp png_ptr = png_create_png_struct(user_png_ver, error_ptr,
@@ -39,7 +40,8 @@ png_create_read_struct,(png_const_charp user_png_ver, png_voidp error_ptr,
 PNG_FUNCTION(png_structp,PNGAPI
 png_create_read_struct_2,(png_const_charp user_png_ver, png_voidp error_ptr,
     png_error_ptr error_fn, png_error_ptr warn_fn, png_voidp mem_ptr,
-    png_malloc_ptr malloc_fn, png_free_ptr free_fn),PNG_ALLOCATED)
+    png_malloc_ptr malloc_fn, png_free_ptr free_fn),
+    PNG_ALLOCATED)
 {
    png_structp png_ptr = png_create_png_struct(user_png_ver, error_ptr,
        error_fn, warn_fn, mem_ptr, malloc_fn, free_fn);
@@ -519,7 +521,6 @@ png_read_row(png_structrp png_ptr, png_bytep row, png_bytep dsp_row)
 
    if (png_ptr->read_row_fn != NULL)
       (*(png_ptr->read_row_fn))(png_ptr, png_ptr->row_number, png_ptr->pass);
-
 }
 #endif /* SEQUENTIAL_READ */
 
@@ -867,7 +868,7 @@ png_set_read_status_fn(png_structrp png_ptr, png_read_status_ptr read_row_fn)
 #ifdef PNG_INFO_IMAGE_SUPPORTED
 void PNGAPI
 png_read_png(png_structrp png_ptr, png_inforp info_ptr,
-    int transforms, voidp params)
+    int transforms, png_voidp params)
 {
    png_debug(1, "in png_read_png");
 
@@ -1106,17 +1107,17 @@ typedef struct
 {
    /* Arguments: */
    png_imagep image;
-   png_voidp  buffer;
+   png_voidp buffer;
    png_int_32 row_stride;
-   png_voidp  colormap;
+   png_voidp colormap;
    png_const_colorp background;
    /* Local variables: */
-   png_voidp       local_row;
-   png_voidp       first_row;
-   ptrdiff_t       row_bytes;           /* step between rows */
-   int             file_encoding;       /* E_ values above */
-   png_fixed_point gamma_to_linear;     /* For P_FILE, reciprocal of gamma */
-   int             colormap_processing; /* PNG_CMAP_ values above */
+   png_voidp local_row;
+   png_voidp first_row;
+   ptrdiff_t row_bytes;             /* step between rows */
+   int file_encoding;               /* E_ values above */
+   png_fixed_point gamma_to_linear; /* For P_FILE, reciprocal of gamma */
+   int colormap_processing;         /* PNG_CMAP_ values above */
 } png_image_read_control;
 
 /* Do all the *safe* initialization - 'safe' means that png_error won't be
@@ -2837,17 +2838,17 @@ png_image_read_and_map(png_voidp argument)
    }
 
    {
-      png_uint_32  height = image->height;
-      png_uint_32  width = image->width;
-      int          proc = display->colormap_processing;
-      png_bytep    first_row = png_voidcast(png_bytep, display->first_row);
-      ptrdiff_t    step_row = display->row_bytes;
+      png_uint_32 height = image->height;
+      png_uint_32 width = image->width;
+      int proc = display->colormap_processing;
+      png_bytep first_row = png_voidcast(png_bytep, display->first_row);
+      ptrdiff_t step_row = display->row_bytes;
       int pass;
 
       for (pass = 0; pass < passes; ++pass)
       {
-         unsigned int     startx, stepx, stepy;
-         png_uint_32      y;
+         unsigned int startx, stepx, stepy;
+         png_uint_32 y;
 
          if (png_ptr->interlaced == PNG_INTERLACE_ADAM7)
          {
@@ -3115,8 +3116,8 @@ png_image_read_colormapped(png_voidp argument)
 
       while (--passes >= 0)
       {
-         png_uint_32      y = image->height;
-         png_bytep        row = png_voidcast(png_bytep, display->first_row);
+         png_uint_32 y = image->height;
+         png_bytep row = png_voidcast(png_bytep, display->first_row);
 
          for (; y > 0; --y)
          {
@@ -3202,17 +3203,18 @@ png_image_read_composite(png_voidp argument)
    }
 
    {
-      png_uint_32  height = image->height;
-      png_uint_32  width = image->width;
-      ptrdiff_t    step_row = display->row_bytes;
+      png_uint_32 height = image->height;
+      png_uint_32 width = image->width;
+      ptrdiff_t step_row = display->row_bytes;
       unsigned int channels =
           (image->format & PNG_FORMAT_FLAG_COLOR) != 0 ? 3 : 1;
+      int optimize_alpha = (png_ptr->flags & PNG_FLAG_OPTIMIZE_ALPHA) != 0;
       int pass;
 
       for (pass = 0; pass < passes; ++pass)
       {
-         unsigned int     startx, stepx, stepy;
-         png_uint_32      y;
+         unsigned int startx, stepx, stepy;
+         png_uint_32 y;
 
          if (png_ptr->interlaced == PNG_INTERLACE_ADAM7)
          {
@@ -3263,20 +3265,44 @@ png_image_read_composite(png_voidp argument)
 
                      if (alpha < 255) /* else just use component */
                      {
-                        /* This is PNG_OPTIMIZED_ALPHA, the component value
-                         * is a linear 8-bit value.  Combine this with the
-                         * current outrow[c] value which is sRGB encoded.
-                         * Arithmetic here is 16-bits to preserve the output
-                         * values correctly.
-                         */
-                        component *= 257*255; /* =65535 */
-                        component += (255-alpha)*png_sRGB_table[outrow[c]];
+                        if (optimize_alpha != 0)
+                        {
+                           /* This is PNG_OPTIMIZED_ALPHA, the component value
+                            * is a linear 8-bit value.  Combine this with the
+                            * current outrow[c] value which is sRGB encoded.
+                            * Arithmetic here is 16-bits to preserve the output
+                            * values correctly.
+                            */
+                           component *= 257*255; /* =65535 */
+                           component += (255-alpha)*png_sRGB_table[outrow[c]];
 
-                        /* So 'component' is scaled by 255*65535 and is
-                         * therefore appropriate for the sRGB to linear
-                         * conversion table.
-                         */
-                        component = PNG_sRGB_FROM_LINEAR(component);
+                           /* Clamp to the valid range to defend against
+                            * unforeseen cases where the data might be sRGB
+                            * instead of linear premultiplied.
+                            * (Belt-and-suspenders for CVE-2025-66293.)
+                            */
+                           if (component > 255*65535)
+                              component = 255*65535;
+
+                           /* So 'component' is scaled by 255*65535 and is
+                            * therefore appropriate for the sRGB-to-linear
+                            * conversion table.
+                            */
+                           component = PNG_sRGB_FROM_LINEAR(component);
+                        }
+                        else
+                        {
+                           /* Compositing was already done on the palette
+                            * entries.  The data is sRGB premultiplied on black.
+                            * Composite with the background in sRGB space.
+                            * This is not gamma-correct, but matches what was
+                            * done to the palette.
+                            */
+                           png_uint_32 background = outrow[c];
+                           component += ((255-alpha) * background + 127) / 255;
+                           if (component > 255)
+                              component = 255;
+                        }
                      }
 
                      outrow[c] = (png_byte)component;
@@ -3369,8 +3395,8 @@ png_image_read_background(png_voidp argument)
 
             for (pass = 0; pass < passes; ++pass)
             {
-               unsigned int     startx, stepx, stepy;
-               png_uint_32      y;
+               unsigned int startx, stepx, stepy;
+               png_uint_32 y;
 
                if (png_ptr->interlaced == PNG_INTERLACE_ADAM7)
                {
@@ -3490,7 +3516,7 @@ png_image_read_background(png_voidp argument)
             /* The division by two is safe because the caller passed in a
              * stride which was multiplied by 2 (below) to get row_bytes.
              */
-            ptrdiff_t    step_row = display->row_bytes / 2;
+            ptrdiff_t step_row = display->row_bytes / 2;
             unsigned int preserve_alpha = (image->format &
                 PNG_FORMAT_FLAG_ALPHA) != 0;
             unsigned int outchannels = 1U+preserve_alpha;
@@ -3504,8 +3530,8 @@ png_image_read_background(png_voidp argument)
 
             for (pass = 0; pass < passes; ++pass)
             {
-               unsigned int     startx, stepx, stepy;
-               png_uint_32      y;
+               unsigned int startx, stepx, stepy;
+               png_uint_32 y;
 
                /* The 'x' start and step are adjusted to output components here.
                 */
@@ -4038,8 +4064,8 @@ png_image_read_direct(png_voidp argument)
 
       while (--passes >= 0)
       {
-         png_uint_32      y = image->height;
-         png_bytep        row = png_voidcast(png_bytep, display->first_row);
+         png_uint_32 y = image->height;
+         png_bytep row = png_voidcast(png_bytep, display->first_row);
 
          for (; y > 0; --y)
          {
