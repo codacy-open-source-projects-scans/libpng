@@ -159,7 +159,7 @@ png_write_info_before_PLTE(png_structrp png_ptr, png_const_inforp info_ptr)
     * them.
     *
     * PNG v3: Chunks mDCV and cLLI provide ancillary information for the
-    * interpretation of the colourspace chunkgs but do not require support for
+    * interpretation of the colourspace chunks but do not require support for
     * those chunks so are outside the "COLORSPACE" check but before the write of
     * the colourspace chunks themselves.
     */
@@ -2219,7 +2219,7 @@ png_image_write_main(png_voidp argument)
 
 
 static void (PNGCBAPI
-image_memory_write)(png_structp png_ptr, png_bytep/*const*/ data, size_t size)
+image_memory_write)(png_structp png_ptr, png_bytep data, size_t size)
 {
    png_image_write_control *display = png_voidcast(png_image_write_control*,
        png_ptr->io_ptr/*backdoor: png_get_io_ptr(png_ptr)*/);
