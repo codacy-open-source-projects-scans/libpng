@@ -2596,7 +2596,7 @@ png_image_read_colormap(png_voidp argument)
                   {
                      r = back_r;
                      g = back_g;
-                     b = back_g;
+                     b = back_b;
                   }
 
                   /* Compare the newly-created color-map entry with the one the
@@ -2978,10 +2978,10 @@ png_image_read_and_map(png_voidp argument)
                          */
                         if (inrow[0] & 0x80) back_i += 9; /* red */
                         if (inrow[0] & 0x40) back_i += 9;
-                        if (inrow[0] & 0x80) back_i += 3; /* green */
-                        if (inrow[0] & 0x40) back_i += 3;
-                        if (inrow[0] & 0x80) back_i += 1; /* blue */
-                        if (inrow[0] & 0x40) back_i += 1;
+                        if (inrow[1] & 0x80) back_i += 3; /* green */
+                        if (inrow[1] & 0x40) back_i += 3;
+                        if (inrow[2] & 0x80) back_i += 1; /* blue */
+                        if (inrow[2] & 0x40) back_i += 1;
 
                         *outrow = (png_byte)back_i;
                      }
